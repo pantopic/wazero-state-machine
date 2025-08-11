@@ -1,13 +1,15 @@
-package guest
+package wazero_state_machine
 
 import (
 	"context"
 	"io"
 
 	"github.com/logbn/zongzi"
+
+	"github.com/pantopic/wazero-pool"
 )
 
-const StateMachinePersistentUri = "zongzi://pantopic.com/cluster/guest/persistent"
+const StateMachinePersistentUri = "pantopic/wazero-state-machine/persistent"
 
 func NewStateMachinePersistent(logger Logger, shardID, replicaID uint64) *StateMachinePersistent {
 	return &StateMachinePersistent{
@@ -22,6 +24,8 @@ var _ zongzi.StateMachinePersistent = (*StateMachinePersistent)(nil)
 type StateMachinePersistent struct {
 	zongzi.StateMachinePersistent
 
+	pool      wazeropool.Instance
+	ctx       context.Context
 	log       Logger
 	shardID   uint64
 	replicaID uint64
@@ -32,6 +36,11 @@ func (fsm *StateMachinePersistent) Open(stopc <-chan struct{}) (index uint64, er
 }
 
 func (fsm *StateMachinePersistent) Update(entries []Entry) []Entry {
+	mod := fsm.pool.Get()
+	for _, e := range entries {
+		setBuf(e.Cmd)
+		_, err := mod.ExportedFunction("update").Call(fsm.StateMachinePersistent.Context(), e.Key, e.Value)
+	}
 	return entries
 }
 

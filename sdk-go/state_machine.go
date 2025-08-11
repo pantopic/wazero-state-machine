@@ -48,6 +48,10 @@ var (
 	meta      = make([]uint32, 8)
 )
 
+//go:wasm-module pantopic/wazero-state-machine
+//export _init
+func _()
+
 //export __statemachine
 func __statemachine() uint32 {
 	meta[0] = uint32(uintptr(unsafe.Pointer(&flags)))

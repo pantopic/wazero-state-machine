@@ -1,4 +1,4 @@
-package guest
+package wazero_state_machine
 
 import (
 	"github.com/logbn/zongzi"

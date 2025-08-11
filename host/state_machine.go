@@ -1,4 +1,4 @@
-package guest
+package wazero_state_machine
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"github.com/logbn/zongzi"
 )
 
-const StateMachineUri = "zongzi://pantopic.com/cluster/guest"
+const StateMachineUri = "pantopic/wazero-state-machine"
 
 func NewStateMachine(logger Logger, shardID, replicaID uint64) *StateMachine {
 	return &StateMachine{
