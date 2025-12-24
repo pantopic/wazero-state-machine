@@ -4,39 +4,8 @@ import (
 	"unsafe"
 )
 
-const (
-	flagPersistent = 1
-)
-
-type (
-	openFunc   func() uint64
-	updateFunc func(index uint64, cmd []byte) (value uint64, data []byte)
-	finishFunc func()
-	readFunc   func(query []byte) (value uint64, data []byte)
-)
-
 var (
-	fnOpen   openFunc
-	fnUpdate updateFunc
-	fnFinish finishFunc
-	fnRead   readFunc
-)
-
-func Register(update updateFunc, finish finishFunc, read readFunc) {
-	fnUpdate = update
-	fnFinish = finish
-	fnRead = read
-}
-
-func RegisterPersistent(open openFunc, update updateFunc, finish finishFunc, read readFunc) {
-	fnOpen = open
-	fnUpdate = update
-	fnFinish = finish
-	fnRead = read
-	flags = flagPersistent
-}
-
-var (
+	meta      = make([]uint32, 8)
 	flags     uint16
 	ShardID   uint64
 	ReplicaID uint64
@@ -44,16 +13,12 @@ var (
 	value     uint64
 	bufCap    uint32 = 2 * 1024 * 1024
 	bufLen    uint32
-	buf       = make([]byte, int(bufCap))
-	meta      = make([]uint32, 8)
+	buf       []byte
 )
-
-//go:wasm-module pantopic/wazero-state-machine
-//export _init
-func _()
 
 //export __statemachine
 func __statemachine() uint32 {
+	buf = make([]byte, int(bufCap))
 	meta[0] = uint32(uintptr(unsafe.Pointer(&flags)))
 	meta[1] = uint32(uintptr(unsafe.Pointer(&ShardID)))
 	meta[2] = uint32(uintptr(unsafe.Pointer(&ReplicaID)))
@@ -65,24 +30,24 @@ func __statemachine() uint32 {
 	return uint32(uintptr(unsafe.Pointer(&meta[0])))
 }
 
-//export statemachineOpen
+//export __statemachineOpen
 func open() uint64 {
 	return fnOpen()
 }
 
-//export statemachineUpdate
+//export __statemachineUpdate
 func update() {
 	var tmp []byte
 	value, tmp = fnUpdate(index, buf[:int(bufLen)])
 	bufLen = uint32(len(tmp))
 }
 
-//export statemachineFinish
+//export __statemachineFinish
 func finish() {
 	fnFinish()
 }
 
-//export statemachineRead
+//export __statemachineRead
 func read() {
 	var tmp []byte
 	value, tmp = fnRead(buf[:int(bufLen)])

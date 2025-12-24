@@ -12,7 +12,7 @@ import (
 const Name = "pantopic/wazero-state-machine"
 
 var (
-	DefaultCtxKeyMeta = `wazero_state_machine_meta`
+	DefaultCtxKeyMeta = `__pantopic_wazero_state_machine_meta`
 )
 
 type meta struct {
@@ -50,17 +50,20 @@ func (p *hostModule) Name() string {
 // Register instantiates the host module, making it available to all module instances in this runtime
 func (p *hostModule) Register(ctx context.Context, r wazero.Runtime) (err error) {
 	builder := r.NewHostModuleBuilder(Name)
-	register := func(name string, fn func(ctx context.Context, m api.Module, stack []uint64)) {
-		builder = builder.NewFunctionBuilder().WithGoModuleFunction(api.GoModuleFunc(fn), nil, nil).Export(name)
-	}
-	register(`_init`, nil)
+	// TODO: Add methods for async return
+	// register := func(name string, fn func(ctx context.Context, m api.Module, stack []uint64)) {
+	// 	 builder = builder.NewFunctionBuilder().WithGoModuleFunction(api.GoModuleFunc(fn), nil, nil).Export(name)
+	// }
+	// register(`_init`, func(ctx context.Context, m api.Module, stack []uint64) {
+	//   // ...
+	// })
 	p.module, err = builder.Instantiate(ctx)
 	return
 }
 
 // InitContext retrieves the meta page from the wasm module
 func (p *hostModule) InitContext(ctx context.Context, m api.Module) (context.Context, error) {
-	stack, err := m.ExportedFunction(`__stateMachineInit`).Call(ctx)
+	stack, err := m.ExportedFunction(`__stateMachine`).Call(ctx)
 	if err != nil {
 		return ctx, err
 	}
@@ -100,16 +103,23 @@ func get[T any](ctx context.Context, key string) T {
 }
 
 func getBuf(m api.Module, meta *meta) []byte {
-	return read(m, meta.ptrBuf, 0, meta.ptrBufCap)
+	return readBytes(m, meta.ptrBuf, 0, meta.ptrBufCap)
 }
 
-func setBuf(m api.Module, meta *meta, buf []byte) {
-	writeUint32(m, meta.ptrBufLen, uint32(len(buf)))
+func setIndex(m api.Module, meta *meta, index uint64) {
+	writeUint64(m, meta.ptrIndex, index)
+}
+
+func setData(m api.Module, meta *meta, buf []byte) {
 	copy(getBuf(m, meta), buf)
 	writeUint32(m, meta.ptrBufLen, uint32(len(buf)))
 }
 
-func read(m api.Module, ptr, ptrLen, ptrCap uint32) (buf []byte) {
+func getData(m api.Module, meta *meta) []byte {
+	return readBytes(m, meta.ptrBuf, meta.ptrBufLen, meta.ptrBufCap)
+}
+
+func readBytes(m api.Module, ptr, ptrLen, ptrCap uint32) (buf []byte) {
 	buf, ok := m.Memory().Read(ptr, readUint32(m, ptrCap))
 	if !ok {
 		log.Panicf("Memory.Read(%d, %d) out of range", ptr, ptrLen)
@@ -125,8 +135,22 @@ func readUint32(m api.Module, ptr uint32) (val uint32) {
 	return
 }
 
+func readUint64(m api.Module, ptr uint32) (val uint64) {
+	val, ok := m.Memory().ReadUint64Le(ptr)
+	if !ok {
+		log.Panicf("Memory.Read(%d) out of range", ptr)
+	}
+	return
+}
+
 func writeUint32(m api.Module, ptr uint32, val uint32) {
 	if ok := m.Memory().WriteUint32Le(ptr, val); !ok {
-		log.Panicf("Memory.Read(%d) out of range", ptr)
+		log.Panicf("Memory.Write(%d) out of range", ptr)
+	}
+}
+
+func writeUint64(m api.Module, ptr uint32, val uint64) {
+	if ok := m.Memory().WriteUint64Le(ptr, val); !ok {
+		log.Panicf("Memory.Write(%d) out of range", ptr)
 	}
 }
