@@ -12,7 +12,7 @@ import (
 const Name = "pantopic/wazero-state-machine"
 
 var (
-	ctxKeyMeta = Name + `meta`
+	ctxKeyMeta = Name + `/meta`
 )
 
 type meta struct {
