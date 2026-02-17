@@ -13,12 +13,12 @@ var (
 	value     uint64
 	bufCap    uint32 = 2 * 1024 * 1024
 	bufLen    uint32
-	buf       []byte
+	buf       = make([]byte, int(bufCap))
+	tmp       []byte
 )
 
-//export __statemachine
+//export __state_machine
 func __statemachine() uint32 {
-	buf = make([]byte, int(bufCap))
 	meta[0] = uint32(uintptr(unsafe.Pointer(&flags)))
 	meta[1] = uint32(uintptr(unsafe.Pointer(&ShardID)))
 	meta[2] = uint32(uintptr(unsafe.Pointer(&ReplicaID)))
@@ -30,27 +30,27 @@ func __statemachine() uint32 {
 	return uint32(uintptr(unsafe.Pointer(&meta[0])))
 }
 
-//export __statemachineOpen
+//export __state_machine_open
 func open() uint64 {
 	return fnOpen()
 }
 
-//export __statemachineUpdate
+//export __state_machine_update
 func update() {
-	var tmp []byte
 	value, tmp = fnUpdate(index, buf[:int(bufLen)])
+	copy(buf[:len(tmp)], tmp)
 	bufLen = uint32(len(tmp))
 }
 
-//export __statemachineFinish
+//export __state_machine_finish
 func finish() {
 	fnFinish()
 }
 
-//export __statemachineRead
+//export __state_machine_read
 func read() {
-	var tmp []byte
 	value, tmp = fnRead(buf[:int(bufLen)])
+	copy(buf[:len(tmp)], tmp)
 	bufLen = uint32(len(tmp))
 }
 

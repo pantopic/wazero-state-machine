@@ -12,7 +12,7 @@ import (
 const Name = "pantopic/wazero-state-machine"
 
 var (
-	DefaultCtxKeyMeta = `__pantopic_wazero_state_machine_meta`
+	ctxKeyMeta = Name + `meta`
 )
 
 type meta struct {
@@ -29,14 +29,11 @@ type meta struct {
 type hostModule struct {
 	sync.RWMutex
 
-	module     api.Module
-	ctxKeyMeta string
+	module api.Module
 }
 
 func New(opts ...Option) *hostModule {
-	p := &hostModule{
-		ctxKeyMeta: DefaultCtxKeyMeta,
-	}
+	p := &hostModule{}
 	for _, opt := range opts {
 		opt(p)
 	}
@@ -63,7 +60,7 @@ func (p *hostModule) Register(ctx context.Context, r wazero.Runtime) (err error)
 
 // InitContext retrieves the meta page from the wasm module
 func (p *hostModule) InitContext(ctx context.Context, m api.Module) (context.Context, error) {
-	stack, err := m.ExportedFunction(`__stateMachine`).Call(ctx)
+	stack, err := m.ExportedFunction(`__state_machine`).Call(ctx)
 	if err != nil {
 		return ctx, err
 	}
@@ -81,12 +78,12 @@ func (p *hostModule) InitContext(ctx context.Context, m api.Module) (context.Con
 	} {
 		*v = readUint32(m, ptr+uint32(4*i))
 	}
-	return context.WithValue(ctx, p.ctxKeyMeta, meta), nil
+	return context.WithValue(ctx, ctxKeyMeta, meta), nil
 }
 
 // ContextCopy populates dst context with the meta page from src context.
 func (h *hostModule) ContextCopy(dst, src context.Context) context.Context {
-	dst = context.WithValue(dst, h.ctxKeyMeta, get[*meta](src, h.ctxKeyMeta))
+	dst = context.WithValue(dst, ctxKeyMeta, get[*meta](src, ctxKeyMeta))
 	return dst
 }
 
@@ -102,17 +99,17 @@ func get[T any](ctx context.Context, key string) T {
 	return v.(T)
 }
 
-func getBuf(m api.Module, meta *meta) []byte {
-	return readBytes(m, meta.ptrBuf, 0, meta.ptrBufCap)
-}
-
 func setIndex(m api.Module, meta *meta, index uint64) {
 	writeUint64(m, meta.ptrIndex, index)
 }
 
 func setData(m api.Module, meta *meta, buf []byte) {
-	copy(getBuf(m, meta), buf)
+	copy(getBuf(m, meta)[:len(buf)], buf)
 	writeUint32(m, meta.ptrBufLen, uint32(len(buf)))
+}
+
+func getBuf(m api.Module, meta *meta) []byte {
+	return readBytes(m, meta.ptrBuf, 0, meta.ptrBufCap)
 }
 
 func getData(m api.Module, meta *meta) []byte {

@@ -12,16 +12,13 @@ import (
 
 const UriPersistent = "pantopic/wazero-state-machine/persistent"
 
-type PoolProvider interface {
-	Get(shardID uint64) wazeropool.Instance
-}
+type PoolProvider func(shardID uint64) wazeropool.Instance
 
-func FactoryPersistent(logger Logger, provider PoolProvider) func(shardID, replicaID uint64) zongzi.StateMachinePersistent {
+func FactoryPersistent(logger Logger, modPool PoolProvider) func(shardID, replicaID uint64) zongzi.StateMachinePersistent {
 	return func(shardID, replicaID uint64) zongzi.StateMachinePersistent {
-		pool := provider.Get(shardID)
 		return &StateMachinePersistent{
 			log:       logger,
-			pool:      pool,
+			pool:      modPool(shardID),
 			replicaID: replicaID,
 			shardID:   shardID,
 		}
@@ -43,7 +40,7 @@ type StateMachinePersistent struct {
 func (fsm *StateMachinePersistent) Open(stopc <-chan struct{}) (index uint64, err error) {
 	var stack []uint64
 	fsm.pool.Run(func(mod api.Module) {
-		if stack, err = mod.ExportedFunction("__statemachineInit").Call(fsm.ctx); err != nil {
+		if stack, err = mod.ExportedFunction("__state_machine_open").Call(fsm.ctx); err != nil {
 			return
 		}
 		if len(stack) > 0 {
@@ -55,9 +52,9 @@ func (fsm *StateMachinePersistent) Open(stopc <-chan struct{}) (index uint64, er
 
 func (fsm *StateMachinePersistent) Update(entries []Entry) []Entry {
 	fsm.pool.Run(func(mod api.Module) {
-		meta := get[*meta](fsm.ctx, DefaultCtxKeyMeta)
-		update := mod.ExportedFunction("__statemachineUpdate")
-		defer mod.ExportedFunction("__statemachineFinish").Call(fsm.ctx)
+		meta := get[*meta](fsm.ctx, ctxKeyMeta)
+		update := mod.ExportedFunction("__state_machine_update")
+		defer mod.ExportedFunction("__state_machine_finish").Call(fsm.ctx)
 		for _, e := range entries {
 			setIndex(mod, meta, e.Index)
 			setData(mod, meta, e.Cmd)
@@ -73,8 +70,8 @@ func (fsm *StateMachinePersistent) Update(entries []Entry) []Entry {
 
 func (fsm *StateMachinePersistent) Query(ctx context.Context, data []byte) (result *Result) {
 	fsm.pool.Run(func(mod api.Module) {
-		meta := get[*meta](fsm.ctx, DefaultCtxKeyMeta)
-		update := mod.ExportedFunction("__statemachineQuery")
+		meta := get[*meta](fsm.ctx, ctxKeyMeta)
+		update := mod.ExportedFunction("__state_machine_read")
 		setData(mod, meta, data)
 		if _, err := update.Call(fsm.ctx); err != nil {
 			panic(err)
