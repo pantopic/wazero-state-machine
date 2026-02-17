@@ -66,5 +66,18 @@ func TestHostModule(t *testing.T) {
 			t.Fatalf(`Data should be "best-2" but got "%s"`, string(ents[1].Result.Data))
 		}
 	})
-
+	t.Run(`read`, func(t *testing.T) {
+		res := sm.Query(ctx, []byte(`items`))
+		if res.Value != 2 {
+			t.Fatalf(`Value should be 2 but got %d`, res.Value)
+		}
+		res = sm.Query(ctx, []byte(`sets`))
+		if res.Value != 1 {
+			t.Fatalf(`Value should be 1 but got %d`, res.Value)
+		}
+		res = sm.Query(ctx, []byte(`index`))
+		if res.Value != 2 {
+			t.Fatalf(`Value should be 2 but got %d`, res.Value)
+		}
+	})
 }

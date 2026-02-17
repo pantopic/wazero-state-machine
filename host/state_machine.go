@@ -56,7 +56,7 @@ func (fsm *StateMachine) Update(entries []Entry) []Entry {
 	return entries
 }
 
-func (fsm *StateMachine) Query(ctx context.Context, data []byte) (result *Result) {
+func (fsm *StateMachine) Query(ctx context.Context, data []byte) (res *Result) {
 	fsm.pool.Run(func(mod api.Module) {
 		meta := get[*meta](fsm.ctx, ctxKeyMeta)
 		update := mod.ExportedFunction("__state_machine_read")
@@ -64,8 +64,9 @@ func (fsm *StateMachine) Query(ctx context.Context, data []byte) (result *Result
 		if _, err := update.Call(fsm.ctx); err != nil {
 			panic(err)
 		}
-		result.Value = readUint64(mod, meta.ptrValue)
-		result.Data = append(result.Data[:0], getData(mod, meta)...)
+		res = &Result{}
+		res.Value = readUint64(mod, meta.ptrValue)
+		res.Data = append(res.Data[:0], getData(mod, meta)...)
 	})
 	return
 }
