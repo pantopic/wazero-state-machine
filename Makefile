@@ -5,8 +5,7 @@ work:
 
 wasm:
 	@cd test && tinygo build -buildmode=wasi-legacy -target=wasi -opt=2 -gc=leaking -scheduler=none -o ../host/test.wasm
-wasm-prod:
-	@cd test && tinygo build -buildmode=wasi-legacy -target=wasi -opt=s -gc=leaking -scheduler=none -o ../host/test.prod.wasm -no-debug
+	@cd test-persistent && tinygo build -buildmode=wasi-legacy -target=wasi -opt=2 -gc=leaking -scheduler=none -o ../host/test-persistent.wasm
 
 test:
 	@cd host && go test . -v -cover

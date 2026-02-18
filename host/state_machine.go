@@ -40,7 +40,6 @@ func (fsm *StateMachine) Update(entries []Entry) []Entry {
 	fsm.pool.Run(func(mod api.Module) {
 		meta := get[*meta](fsm.ctx, ctxKeyMeta)
 		update := mod.ExportedFunction("__state_machine_update")
-		defer mod.ExportedFunction("__state_machine_finish").Call(fsm.ctx)
 		for i, e := range entries {
 			setIndex(mod, meta, e.Index)
 			setData(mod, meta, e.Cmd)
@@ -50,6 +49,7 @@ func (fsm *StateMachine) Update(entries []Entry) []Entry {
 			entries[i].Result.Value = readUint64(mod, meta.ptrValue)
 			entries[i].Result.Data = append(e.Result.Data[:0], getData(mod, meta)...)
 		}
+		mod.ExportedFunction("__state_machine_finish").Call(fsm.ctx)
 	})
 	return entries
 }
@@ -89,6 +89,7 @@ loop:
 	for {
 		select {
 		case <-ctx.Done():
+			close(stop)
 			break loop
 		case <-stop:
 			break loop
@@ -113,10 +114,6 @@ func (fsm *StateMachine) SaveSnapshot(cursor any, w io.Writer, _ SnapshotFileCol
 }
 
 func (fsm *StateMachine) RecoverFromSnapshot(r io.Reader, _ []SnapshotFile, _ <-chan struct{}) (err error) {
-	return
-}
-
-func (fsm *StateMachine) Lookup(any) (res any, err error) {
 	return
 }
 

@@ -14,9 +14,10 @@ const UriPersistent = "pantopic/wazero-state-machine/persistent"
 
 type PoolProvider func(shardID uint64) wazeropool.Instance
 
-func FactoryPersistent(logger Logger, modPool PoolProvider) func(shardID, replicaID uint64) zongzi.StateMachinePersistent {
+func FactoryPersistent(ctx context.Context, logger Logger, modPool PoolProvider) func(shardID, replicaID uint64) zongzi.StateMachinePersistent {
 	return func(shardID, replicaID uint64) zongzi.StateMachinePersistent {
 		return &StateMachinePersistent{
+			ctx:       ctx,
 			log:       logger,
 			pool:      modPool(shardID),
 			replicaID: replicaID,
@@ -54,32 +55,65 @@ func (fsm *StateMachinePersistent) Update(entries []Entry) []Entry {
 	fsm.pool.Run(func(mod api.Module) {
 		meta := get[*meta](fsm.ctx, ctxKeyMeta)
 		update := mod.ExportedFunction("__state_machine_update")
-		defer mod.ExportedFunction("__state_machine_finish").Call(fsm.ctx)
-		for _, e := range entries {
+		for i, e := range entries {
 			setIndex(mod, meta, e.Index)
 			setData(mod, meta, e.Cmd)
 			if _, err := update.Call(fsm.ctx); err != nil {
 				panic(err)
 			}
-			e.Result.Value = readUint64(mod, meta.ptrValue)
-			e.Result.Data = append(e.Result.Data[:0], getData(mod, meta)...)
+			entries[i].Result.Value = readUint64(mod, meta.ptrValue)
+			entries[i].Result.Data = append(e.Result.Data[:0], getData(mod, meta)...)
 		}
+		mod.ExportedFunction("__state_machine_finish").Call(fsm.ctx)
 	})
 	return entries
 }
 
-func (fsm *StateMachinePersistent) Query(ctx context.Context, data []byte) (result *Result) {
+func (fsm *StateMachinePersistent) Query(ctx context.Context, data []byte) (res *Result) {
+	res = zongzi.GetResult()
 	fsm.pool.Run(func(mod api.Module) {
-		meta := get[*meta](fsm.ctx, ctxKeyMeta)
+		meta := get[*meta](ctx, ctxKeyMeta)
 		update := mod.ExportedFunction("__state_machine_read")
 		setData(mod, meta, data)
-		if _, err := update.Call(fsm.ctx); err != nil {
+		if _, err := update.Call(ctx); err != nil {
 			panic(err)
 		}
-		result.Value = readUint64(mod, meta.ptrValue)
-		result.Data = append(result.Data[:0], getData(mod, meta)...)
+		res.Value = readUint64(mod, meta.ptrValue)
+		res.Data = append(res.Data[:0], getData(mod, meta)...)
 	})
 	return
+}
+
+func (fsm *StateMachinePersistent) Stream(ctx context.Context, in <-chan []byte, out chan<- *Result) {
+	stop := make(chan bool)
+	meta := get[*meta](fsm.ctx, ctxKeyMeta)
+	fsm.pool.Run(func(mod api.Module) {
+		mod.ExportedFunction("__state_machine_stream_open").Call(ctx)
+	})
+	ctx = context.WithValue(ctx, ctxKeySend, func(res *Result) {
+		out <- res
+	})
+	ctx = context.WithValue(ctx, ctxKeyClose, func() {
+		close(stop)
+	})
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			close(stop)
+			break loop
+		case <-stop:
+			break loop
+		case data := <-in:
+			fsm.pool.Run(func(mod api.Module) {
+				setData(mod, meta, data)
+				mod.ExportedFunction("__state_machine_stream_recv").Call(ctx)
+			})
+		}
+	}
+	fsm.pool.Run(func(mod api.Module) {
+		mod.ExportedFunction("__state_machine_stream_closed").Call(ctx)
+	})
 }
 
 func (fsm *StateMachinePersistent) PrepareSnapshot() (cursor any, err error) {

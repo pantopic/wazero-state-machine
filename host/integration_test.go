@@ -18,6 +18,16 @@ import (
 //go:embed test\.wasm
 var testWasm []byte
 
+//go:embed test\-persistent\.wasm
+var testWasmPersistent []byte
+
+type StateMachineCommon interface {
+	Update(entries []Entry) []Entry
+	Query(ctx context.Context, query []byte) *Result
+	Watch(ctx context.Context, query []byte, result chan<- *Result)
+	Stream(ctx context.Context, in <-chan []byte, out chan<- *Result)
+}
+
 func TestHostModule(t *testing.T) {
 	ctx := context.Background()
 	r := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
@@ -30,21 +40,42 @@ func TestHostModule(t *testing.T) {
 	})
 
 	cfg := wazero.NewModuleConfig().WithStdout(os.Stdout)
-	pool, err := wazeropool.New(ctx, r, testWasm,
-		wazeropool.WithModuleConfig(cfg))
-	if err != nil {
-		t.Fatalf(`%v`, err)
-	}
-	pool.Run(func(mod api.Module) {
-		ctx, err = hostModule.InitContext(ctx, mod)
+	t.Run(`in-memory`, func(t *testing.T) {
+		pool, err := wazeropool.New(ctx, r, testWasm,
+			wazeropool.WithModuleConfig(cfg))
 		if err != nil {
 			t.Fatalf(`%v`, err)
 		}
+		pool.Run(func(mod api.Module) {
+			ctx, err = hostModule.InitContext(ctx, mod)
+			if err != nil {
+				t.Fatalf(`%v`, err)
+			}
+		})
+		smf := Factory(ctx, zongzi.GetLogger(`test`), func(uint64) wazeropool.Instance {
+			return pool
+		})
+		test(t, ctx, smf(1, 1))
 	})
-	smf := Factory(ctx, zongzi.GetLogger(`test`), func(uint64) wazeropool.Instance {
-		return pool
+	t.Run(`persistent`, func(t *testing.T) {
+		pool, err := wazeropool.New(ctx, r, testWasmPersistent,
+			wazeropool.WithModuleConfig(cfg))
+		if err != nil {
+			t.Fatalf(`%v`, err)
+		}
+		pool.Run(func(mod api.Module) {
+			ctx, err = hostModule.InitContext(ctx, mod)
+			if err != nil {
+				t.Fatalf(`%v`, err)
+			}
+		})
+		smf := FactoryPersistent(ctx, zongzi.GetLogger(`test-persistent`), func(uint64) wazeropool.Instance {
+			return pool
+		})
+		test(t, ctx, smf(1, 1))
 	})
-	sm := smf(1, 1)
+}
+func test(t *testing.T, ctx context.Context, sm StateMachineCommon) {
 	t.Run(`update`, func(t *testing.T) {
 		ents := sm.Update([]Entry{{
 			Index: 1,
