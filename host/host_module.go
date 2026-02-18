@@ -5,6 +5,7 @@ import (
 	"log"
 	"sync"
 
+	"github.com/logbn/zongzi"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 )
@@ -12,7 +13,9 @@ import (
 const Name = "pantopic/wazero-state-machine"
 
 var (
-	ctxKeyMeta = Name + `/meta`
+	ctxKeyMeta  = Name + `/meta`
+	ctxKeySend  = Name + `/send`
+	ctxKeyClose = Name + `/close`
 )
 
 type meta struct {
@@ -47,13 +50,34 @@ func (p *hostModule) Name() string {
 // Register instantiates the host module, making it available to all module instances in this runtime
 func (p *hostModule) Register(ctx context.Context, r wazero.Runtime) (err error) {
 	builder := r.NewHostModuleBuilder(Name)
-	// TODO: Add methods for async return
-	// register := func(name string, fn func(ctx context.Context, m api.Module, stack []uint64)) {
-	// 	 builder = builder.NewFunctionBuilder().WithGoModuleFunction(api.GoModuleFunc(fn), nil, nil).Export(name)
-	// }
-	// register(`_init`, func(ctx context.Context, m api.Module, stack []uint64) {
-	//   // ...
-	// })
+	register := func(name string, fn func(ctx context.Context, m api.Module, stack []uint64)) {
+		builder = builder.NewFunctionBuilder().WithGoModuleFunction(api.GoModuleFunc(fn), nil, nil).Export(name)
+	}
+	for name, fn := range map[string]any{
+		"__state_machine_stream_send": func(ctx context.Context, res *Result) {
+			get[func(*Result)](ctx, ctxKeySend)(res)
+		},
+		"__state_machine_stream_close": func(ctx context.Context) {
+			get[func()](ctx, ctxKeyClose)()
+		},
+	} {
+		switch fn := fn.(type) {
+		case func(ctx context.Context, res *Result):
+			register(name, func(ctx context.Context, m api.Module, stack []uint64) {
+				meta := get[*meta](ctx, ctxKeyMeta)
+				res := zongzi.GetResult()
+				res.Value = getValue(m, meta)
+				res.Data = append(res.Data, getData(m, meta)...)
+				fn(ctx, res)
+			})
+		case func(ctx context.Context):
+			register(name, func(ctx context.Context, m api.Module, stack []uint64) {
+				fn(ctx)
+			})
+		default:
+			log.Panicf("Method signature implementation missing: %#v", fn)
+		}
+	}
 	p.module, err = builder.Instantiate(ctx)
 	return
 }
@@ -114,6 +138,10 @@ func getBuf(m api.Module, meta *meta) []byte {
 
 func getData(m api.Module, meta *meta) []byte {
 	return readBytes(m, meta.ptrBuf, meta.ptrBufLen, meta.ptrBufCap)
+}
+
+func getValue(m api.Module, meta *meta) (val uint64) {
+	return readUint64(m, meta.ptrValue)
 }
 
 func readBytes(m api.Module, ptr, ptrLen, ptrCap uint32) (buf []byte) {

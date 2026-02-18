@@ -14,6 +14,7 @@ var (
 
 func main() {
 	statemachine.Register(update, finish, read)
+	statemachine.WithStreaming(streamOpen, streamRecv, streamClosed)
 }
 
 func update(index uint64, cmd []byte) (value uint64, data []byte) {
@@ -45,4 +46,25 @@ func read(query []byte) (value uint64, data []byte) {
 		panic(`Unrecognized query: "` + string(query) + `"`)
 	}
 	return
+}
+
+func streamOpen() {
+	println(`wasm open`)
+}
+
+func streamRecv(data []byte) {
+	println(`wasm recv ` + string(data))
+	if bytes.Equal(data, []byte(`close`)) {
+		println(`wasm close start`)
+		statemachine.StreamClose()
+		println(`wasm close complete`)
+	} else {
+		println(`wasm send start`)
+		statemachine.StreamSend(1, data)
+		println(`wasm send complete`)
+	}
+}
+
+func streamClosed() {
+	println(`wasm closed`)
 }

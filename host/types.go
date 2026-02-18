@@ -4,6 +4,11 @@ import (
 	"github.com/logbn/zongzi"
 )
 
+const (
+	flagPersistent = iota
+	flagStreaming
+)
+
 type (
 	Entry  = zongzi.Entry
 	Logger = zongzi.Logger

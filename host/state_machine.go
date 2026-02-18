@@ -3,7 +3,6 @@ package wazero_state_machine
 import (
 	"context"
 	"io"
-	"log/slog"
 
 	"github.com/logbn/zongzi"
 	"github.com/tetratelabs/wazero/api"
@@ -50,25 +49,59 @@ func (fsm *StateMachine) Update(entries []Entry) []Entry {
 			}
 			entries[i].Result.Value = readUint64(mod, meta.ptrValue)
 			entries[i].Result.Data = append(e.Result.Data[:0], getData(mod, meta)...)
-			slog.Info(`Update`, `Value`, entries[i].Result.Value, `Data`, string(entries[i].Result.Data))
 		}
 	})
 	return entries
 }
 
 func (fsm *StateMachine) Query(ctx context.Context, data []byte) (res *Result) {
+	res = zongzi.GetResult()
 	fsm.pool.Run(func(mod api.Module) {
-		meta := get[*meta](fsm.ctx, ctxKeyMeta)
+		meta := get[*meta](ctx, ctxKeyMeta)
 		update := mod.ExportedFunction("__state_machine_read")
 		setData(mod, meta, data)
-		if _, err := update.Call(fsm.ctx); err != nil {
+		if _, err := update.Call(ctx); err != nil {
 			panic(err)
 		}
-		res = &Result{}
 		res.Value = readUint64(mod, meta.ptrValue)
 		res.Data = append(res.Data[:0], getData(mod, meta)...)
 	})
 	return
+}
+
+func (fsm *StateMachine) Watch(ctx context.Context, query []byte, result chan<- *Result) {
+
+}
+
+func (fsm *StateMachine) Stream(ctx context.Context, in <-chan []byte, out chan<- *Result) {
+	stop := make(chan bool)
+	meta := get[*meta](fsm.ctx, ctxKeyMeta)
+	fsm.pool.Run(func(mod api.Module) {
+		mod.ExportedFunction("__state_machine_stream_open").Call(ctx)
+	})
+	ctx = context.WithValue(ctx, ctxKeySend, func(res *Result) {
+		out <- res
+	})
+	ctx = context.WithValue(ctx, ctxKeyClose, func() {
+		close(stop)
+	})
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			break loop
+		case <-stop:
+			break loop
+		case data := <-in:
+			fsm.pool.Run(func(mod api.Module) {
+				setData(mod, meta, data)
+				mod.ExportedFunction("__state_machine_stream_recv").Call(ctx)
+			})
+		}
+	}
+	fsm.pool.Run(func(mod api.Module) {
+		mod.ExportedFunction("__state_machine_stream_closed").Call(ctx)
+	})
 }
 
 func (fsm *StateMachine) PrepareSnapshot() (cursor any, err error) {

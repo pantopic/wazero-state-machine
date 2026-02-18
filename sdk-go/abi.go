@@ -54,8 +54,47 @@ func read() {
 	bufLen = uint32(len(tmp))
 }
 
+//export __state_machine_stream_open
+func stream_open() {
+	if fnStreamOpen != nil {
+		fnStreamOpen()
+	}
+}
+
+//export __state_machine_stream_recv
+func stream_recv() {
+	fnStreamRecv(buf[:int(bufLen)])
+}
+
+//export __state_machine_stream_closed
+func stream_closed() {
+	if fnStreamClosed != nil {
+		fnStreamClosed()
+	}
+}
+
+func setData(v []byte) {
+	copy(buf[:len(v)], v)
+	bufLen = uint32(len(v))
+}
+
+func setValue(v uint64) {
+	value = v
+}
+
+//go:wasm-module pantopic/wazero-state-machine
+//export __state_machine_stream_send
+func streamSend()
+
+//go:wasm-module pantopic/wazero-state-machine
+//export __state_machine_stream_close
+func streamClose()
+
 var _ = __statemachine
 var _ = open
 var _ = update
 var _ = finish
 var _ = read
+var _ = stream_open
+var _ = stream_recv
+var _ = stream_closed

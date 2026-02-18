@@ -80,4 +80,45 @@ func TestHostModule(t *testing.T) {
 			t.Fatalf(`Value should be 2 but got %d`, res.Value)
 		}
 	})
+	t.Run(`stream`, func(t *testing.T) {
+		t.Run(`success`, func(t *testing.T) {
+			in := make(chan []byte)
+			out := make(chan *Result)
+			go func() {
+				in <- []byte(`echo`)
+				in <- []byte(`close`)
+			}()
+			go func() {
+				for res := range out {
+					if res.Value != 1 {
+						t.Fatalf(`Value should be 1 but got %d`, res.Value)
+					}
+					if string(res.Data) != `echo` {
+						t.Fatalf(`Data should be "echo" but got "%s"`, res.Data)
+					}
+				}
+			}()
+			sm.Stream(ctx, in, out)
+		})
+		t.Run(`context cancel`, func(t *testing.T) {
+			in := make(chan []byte)
+			out := make(chan *Result)
+			ctx, cancel := context.WithCancel(ctx)
+			go func() {
+				in <- []byte(`echo`)
+				cancel()
+			}()
+			go func() {
+				for res := range out {
+					if res.Value != 1 {
+						t.Fatalf(`Value should be 1 but got %d`, res.Value)
+					}
+					if string(res.Data) != `echo` {
+						t.Fatalf(`Data should be "echo" but got "%s"`, res.Data)
+					}
+				}
+			}()
+			sm.Stream(ctx, in, out)
+		})
+	})
 }
