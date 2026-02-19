@@ -60,6 +60,12 @@ func (p *hostModule) Register(ctx context.Context, r wazero.Runtime) (err error)
 		"__state_machine_stream_close": func(ctx context.Context) {
 			get[func()](ctx, ctxKeyClose)()
 		},
+		"__state_machine_watch_send": func(ctx context.Context, res *Result) {
+			get[func(*Result)](ctx, ctxKeySend)(res)
+		},
+		"__state_machine_watch_close": func(ctx context.Context) {
+			get[func()](ctx, ctxKeyClose)()
+		},
 	} {
 		switch fn := fn.(type) {
 		case func(ctx context.Context, res *Result):

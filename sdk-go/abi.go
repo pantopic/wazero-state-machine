@@ -73,6 +73,18 @@ func stream_closed() {
 	}
 }
 
+//export __state_machine_watch_open
+func watch_open() {
+	fnWatchOpen(buf[:int(bufLen)])
+}
+
+//export __state_machine_watch_closed
+func watch_closed() {
+	if fnWatchClosed != nil {
+		fnWatchClosed()
+	}
+}
+
 func setData(v []byte) {
 	copy(buf[:len(v)], v)
 	bufLen = uint32(len(v))
@@ -90,6 +102,14 @@ func streamSend()
 //export __state_machine_stream_close
 func streamClose()
 
+//go:wasm-module pantopic/wazero-state-machine
+//export __state_machine_watch_send
+func watchSend()
+
+//go:wasm-module pantopic/wazero-state-machine
+//export __state_machine_watch_close
+func watchClose()
+
 var _ = __statemachine
 var _ = open
 var _ = update
@@ -98,3 +118,5 @@ var _ = read
 var _ = stream_open
 var _ = stream_recv
 var _ = stream_closed
+var _ = watch_open
+var _ = watch_closed

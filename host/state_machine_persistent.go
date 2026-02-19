@@ -84,7 +84,38 @@ func (fsm *StateMachinePersistent) Query(ctx context.Context, data []byte) (res 
 	return
 }
 
+func (fsm *StateMachinePersistent) Watch(ctx context.Context, data []byte, out chan<- *Result) {
+	var closed bool
+	stop := make(chan bool)
+	meta := get[*meta](fsm.ctx, ctxKeyMeta)
+	ctx = context.WithValue(ctx, ctxKeySend, func(res *Result) {
+		out <- res
+	})
+	ctx = context.WithValue(ctx, ctxKeyClose, func() {
+		closed = true
+		close(stop)
+	})
+	fsm.pool.Run(func(mod api.Module) {
+		setData(mod, meta, data)
+		mod.ExportedFunction("__state_machine_watch_open").Call(ctx)
+	})
+	select {
+	case <-ctx.Done():
+		if !closed {
+			close(stop)
+		}
+		break
+	case <-stop:
+		break
+	}
+	fsm.pool.Run(func(mod api.Module) {
+		setData(mod, meta, data)
+		mod.ExportedFunction("__state_machine_watch_closed").Call(ctx)
+	})
+}
+
 func (fsm *StateMachinePersistent) Stream(ctx context.Context, in <-chan []byte, out chan<- *Result) {
+	var closed bool
 	stop := make(chan bool)
 	meta := get[*meta](fsm.ctx, ctxKeyMeta)
 	fsm.pool.Run(func(mod api.Module) {
@@ -94,13 +125,16 @@ func (fsm *StateMachinePersistent) Stream(ctx context.Context, in <-chan []byte,
 		out <- res
 	})
 	ctx = context.WithValue(ctx, ctxKeyClose, func() {
+		closed = true
 		close(stop)
 	})
 loop:
 	for {
 		select {
 		case <-ctx.Done():
-			close(stop)
+			if !closed {
+				close(stop)
+			}
 			break loop
 		case <-stop:
 			break loop

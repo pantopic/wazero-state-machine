@@ -5,6 +5,8 @@ import (
 	"context"
 	_ "embed"
 	"os"
+	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/logbn/zongzi"
@@ -75,6 +77,7 @@ func TestHostModule(t *testing.T) {
 		test(t, ctx, smf(1, 1))
 	})
 }
+
 func test(t *testing.T, ctx context.Context, sm StateMachineCommon) {
 	t.Run(`update`, func(t *testing.T) {
 		ents := sm.Update([]Entry{{
@@ -150,6 +153,58 @@ func test(t *testing.T, ctx context.Context, sm StateMachineCommon) {
 				}
 			}()
 			sm.Stream(ctx, in, out)
+		})
+	})
+	t.Run(`watch`, func(t *testing.T) {
+		t.Run(`success`, func(t *testing.T) {
+			var received int
+			out := make(chan *Result)
+			var wg sync.WaitGroup
+			wg.Go(func() {
+				for res := range out {
+					received++
+					println(`watch ` + string(res.Data))
+					if res.Value != 1 {
+						t.Fatalf(`Value should be 1 but got %d`, res.Value)
+					}
+					if string(res.Data) != strconv.Itoa(received) {
+						t.Fatalf(`Data should be "%d" but got "%s"`, received, res.Data)
+					}
+				}
+			})
+			n := 2
+			sm.Watch(ctx, []byte(strconv.Itoa(n)), out)
+			close(out)
+			wg.Wait()
+			if received != n {
+				t.Fatalf(`Should have received %d events but got %d`, n, received)
+			}
+		})
+		t.Run(`context cancel`, func(t *testing.T) {
+			var received int
+			out := make(chan *Result)
+			ctx, cancel := context.WithCancel(ctx)
+			var wg sync.WaitGroup
+			wg.Go(func() {
+				defer close(out)
+				for res := range out {
+					received++
+					if res.Value != 1 {
+						t.Fatalf(`Value should be 1 but got %d`, res.Value)
+					}
+					if string(res.Data) != strconv.Itoa(received) {
+						t.Fatalf(`Data should be "%d" but got "%s"`, received, res.Data)
+					}
+					cancel()
+					return
+				}
+			})
+			n := 2
+			sm.Watch(ctx, []byte(strconv.Itoa(n)), out)
+			wg.Wait()
+			if received != 1 {
+				t.Fatalf(`Should have received 1 events but got %d`, received)
+			}
 		})
 	})
 }

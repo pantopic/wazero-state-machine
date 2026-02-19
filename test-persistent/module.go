@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"strconv"
 
 	"github.com/pantopic/wazero-state-machine/sdk-go"
 )
@@ -14,7 +15,8 @@ var (
 
 func main() {
 	statemachine.RegisterPersistent(open, update, finish, read)
-	statemachine.WithStreaming(streamOpen, streamRecv, streamClosed)
+	statemachine.Streamable(streamOpen, streamRecv, streamClosed)
+	statemachine.Watchable(watchOpen, watchClosed)
 }
 
 func open() uint64 {
@@ -53,22 +55,39 @@ func read(query []byte) (value uint64, data []byte) {
 }
 
 func streamOpen() {
-	println(`wasm open`)
+	println(`wasm stream open`)
 }
 
 func streamRecv(data []byte) {
-	println(`wasm recv ` + string(data))
+	println(`wasm stream recv ` + string(data))
 	if bytes.Equal(data, []byte(`close`)) {
-		println(`wasm close start`)
+		println(`wasm stream close start`)
 		statemachine.StreamClose()
-		println(`wasm close complete`)
+		println(`wasm stream close complete`)
 	} else {
-		println(`wasm send start`)
+		println(`wasm stream send start`)
 		statemachine.StreamSend(1, data)
-		println(`wasm send complete`)
+		println(`wasm stream send complete`)
 	}
 }
 
 func streamClosed() {
-	println(`wasm closed`)
+	println(`wasm stream closed`)
+}
+
+func watchOpen(data []byte) {
+	println(`wasm watch open`)
+	n, err := strconv.Atoi(string(data))
+	if err != nil {
+		panic(err)
+	}
+	for i := range n {
+		println(`wasm watch send ` + strconv.Itoa(i+1))
+		statemachine.WatchSend(1, []byte(strconv.Itoa(i+1)))
+	}
+	statemachine.WatchClose()
+}
+
+func watchClosed() {
+	println(`wasm watch closed`)
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"strconv"
 
 	"github.com/pantopic/wazero-state-machine/sdk-go"
 )
@@ -14,7 +15,8 @@ var (
 
 func main() {
 	statemachine.Register(update, finish, read)
-	statemachine.WithStreaming(streamOpen, streamRecv, streamClosed)
+	statemachine.Streamable(streamOpen, streamRecv, streamClosed)
+	statemachine.Watchable(watchOpen, watchClosed)
 }
 
 func update(index uint64, cmd []byte) (value uint64, data []byte) {
@@ -67,4 +69,21 @@ func streamRecv(data []byte) {
 
 func streamClosed() {
 	println(`wasm closed`)
+}
+
+func watchOpen(data []byte) {
+	println(`wasm watch open`)
+	n, err := strconv.Atoi(string(data))
+	if err != nil {
+		panic(err)
+	}
+	for i := range n {
+		println(`wasm watch send ` + strconv.Itoa(i+1))
+		statemachine.WatchSend(1, []byte(strconv.Itoa(i+1)))
+	}
+	statemachine.WatchClose()
+}
+
+func watchClosed() {
+	println(`wasm watch closed`)
 }

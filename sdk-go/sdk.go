@@ -2,7 +2,8 @@ package statemachine
 
 const (
 	flagPersistent = 1 << iota
-	flagStreaming
+	flagStreamable
+	flagWatchable
 )
 
 type (
@@ -13,6 +14,8 @@ type (
 	funcStreamOpen   func()
 	funcStreamRecv   func(cmd []byte)
 	funcStreamClosed func()
+	funcWatchOpen    func(cmd []byte)
+	funcWatchClosed  func()
 )
 
 var (
@@ -23,6 +26,8 @@ var (
 	fnStreamOpen   funcStreamOpen
 	fnStreamRecv   funcStreamRecv
 	fnStreamClosed funcStreamClosed
+	fnWatchOpen    funcWatchOpen
+	fnWatchClosed  funcWatchClosed
 )
 
 func Register(
@@ -48,7 +53,7 @@ func RegisterPersistent(
 	flags = flags & flagPersistent
 }
 
-func WithStreaming(
+func Streamable(
 	streamOpen funcStreamOpen,
 	streamRecv funcStreamRecv,
 	streamClosed funcStreamClosed,
@@ -56,7 +61,7 @@ func WithStreaming(
 	fnStreamOpen = streamOpen
 	fnStreamRecv = streamRecv
 	fnStreamClosed = streamClosed
-	flags = flags & flagStreaming
+	flags = flags & flagStreamable
 }
 
 func StreamSend(val uint64, data []byte) {
@@ -67,4 +72,23 @@ func StreamSend(val uint64, data []byte) {
 
 func StreamClose() {
 	streamClose()
+}
+
+func Watchable(
+	watchOpen funcWatchOpen,
+	watchClosed funcWatchClosed,
+) {
+	fnWatchOpen = watchOpen
+	fnWatchClosed = watchClosed
+	flags = flags & flagWatchable
+}
+
+func WatchSend(val uint64, data []byte) {
+	setValue(val)
+	setData(data)
+	watchSend()
+}
+
+func WatchClose() {
+	watchClose()
 }
