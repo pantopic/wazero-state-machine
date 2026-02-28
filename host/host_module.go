@@ -36,19 +36,19 @@ type hostModule struct {
 }
 
 func New(opts ...Option) *hostModule {
-	p := &hostModule{}
+	h := &hostModule{}
 	for _, opt := range opts {
-		opt(p)
+		opt(h)
 	}
-	return p
+	return h
 }
 
-func (p *hostModule) Name() string {
+func (h *hostModule) Name() string {
 	return Name
 }
 
 // Register instantiates the host module, making it available to all module instances in this runtime
-func (p *hostModule) Register(ctx context.Context, r wazero.Runtime) (err error) {
+func (h *hostModule) Register(ctx context.Context, r wazero.Runtime) (err error) {
 	builder := r.NewHostModuleBuilder(Name)
 	register := func(name string, fn func(ctx context.Context, m api.Module, stack []uint64)) {
 		builder = builder.NewFunctionBuilder().WithGoModuleFunction(api.GoModuleFunc(fn), nil, nil).Export(name)
@@ -73,7 +73,7 @@ func (p *hostModule) Register(ctx context.Context, r wazero.Runtime) (err error)
 				meta := get[*meta](ctx, ctxKeyMeta)
 				res := zongzi.GetResult()
 				res.Value = getValue(m, meta)
-				res.Data = append(res.Data, getData(m, meta)...)
+				res.Data = append(res.Data[:0], getData(m, meta)...)
 				fn(ctx, res)
 			})
 		case func(ctx context.Context):
@@ -84,12 +84,12 @@ func (p *hostModule) Register(ctx context.Context, r wazero.Runtime) (err error)
 			log.Panicf("Method signature implementation missing: %#v", fn)
 		}
 	}
-	p.module, err = builder.Instantiate(ctx)
+	h.module, err = builder.Instantiate(ctx)
 	return
 }
 
 // InitContext retrieves the meta page from the wasm module
-func (p *hostModule) InitContext(ctx context.Context, m api.Module) (context.Context, error) {
+func (h *hostModule) InitContext(ctx context.Context, m api.Module) (context.Context, error) {
 	stack, err := m.ExportedFunction(`__state_machine`).Call(ctx)
 	if err != nil {
 		return ctx, err
@@ -117,7 +117,7 @@ func (h *hostModule) ContextCopy(dst, src context.Context) context.Context {
 	return dst
 }
 
-func (p *hostModule) Stop() (err error) {
+func (h *hostModule) Stop() (err error) {
 	return
 }
 
