@@ -12,14 +12,15 @@ import (
 
 const Uri = "pantopic/wazero-state-machine"
 
-func Factory(ctx context.Context, logger Logger, modPool PoolProvider) func(shardID, replicaID uint64) zongzi.StateMachine {
+func Factory(ctx context.Context, logger Logger, modPool PoolProvider, ctxCopy ...ctxCopyFunc) func(shardID, replicaID uint64) zongzi.StateMachine {
 	return func(shardID, replicaID uint64) zongzi.StateMachine {
 		return &StateMachine{
 			ctx:       ctx,
+			ctxCopy:   ctxCopy,
 			log:       logger,
 			pool:      modPool(shardID),
-			shardID:   shardID,
 			replicaID: replicaID,
+			shardID:   shardID,
 		}
 	}
 }
@@ -30,37 +31,47 @@ type StateMachine struct {
 	zongzi.StateMachine
 
 	ctx       context.Context
+	ctxCopy   []ctxCopyFunc
 	log       Logger
 	pool      wazeropool.Instance
 	replicaID uint64
 	shardID   uint64
 }
 
+func (fsm *StateMachine) contextCopy(ctx context.Context) context.Context {
+	for _, fn := range fsm.ctxCopy {
+		ctx = fn(ctx, fsm.ctx)
+	}
+	return ctx
+}
+
 func (fsm *StateMachine) Update(entries []Entry) []Entry {
+	ctx := fsm.contextCopy(context.Background())
 	fsm.pool.Run(func(mod api.Module) {
 		meta := get[*meta](fsm.ctx, ctxKeyMeta)
 		update := mod.ExportedFunction("__state_machine_update")
 		for i, e := range entries {
 			setIndex(mod, meta, e.Index)
 			setData(mod, meta, e.Cmd)
-			if _, err := update.Call(fsm.ctx); err != nil {
+			if _, err := update.Call(ctx); err != nil {
 				panic(err)
 			}
 			entries[i].Result.Value = readUint64(mod, meta.ptrValue)
-			entries[i].Result.Data = append(e.Result.Data[:0], getData(mod, meta)...)
+			entries[i].Result.Data = append(entries[i].Result.Data[:0], getData(mod, meta)...)
 		}
-		mod.ExportedFunction("__state_machine_finish").Call(fsm.ctx)
+		mod.ExportedFunction("__state_machine_finish").Call(ctx)
 	})
 	return entries
 }
 
 func (fsm *StateMachine) Query(ctx context.Context, data []byte) (res *Result) {
 	res = zongzi.GetResult()
+	ctx = fsm.contextCopy(ctx)
 	fsm.pool.Run(func(mod api.Module) {
-		meta := get[*meta](ctx, ctxKeyMeta)
-		update := mod.ExportedFunction("__state_machine_read")
+		meta := get[*meta](fsm.ctx, ctxKeyMeta)
+		read := mod.ExportedFunction("__state_machine_read")
 		setData(mod, meta, data)
-		if _, err := update.Call(ctx); err != nil {
+		if _, err := read.Call(ctx); err != nil {
 			panic(err)
 		}
 		res.Value = readUint64(mod, meta.ptrValue)
@@ -73,6 +84,7 @@ func (fsm *StateMachine) Watch(ctx context.Context, data []byte, out chan<- *Res
 	var closed bool
 	stop := make(chan bool)
 	meta := get[*meta](fsm.ctx, ctxKeyMeta)
+	ctx = fsm.contextCopy(ctx)
 	ctx = context.WithValue(ctx, ctxKeySend, func(res *Result) {
 		out <- res
 	})
@@ -103,15 +115,16 @@ func (fsm *StateMachine) Stream(ctx context.Context, in <-chan []byte, out chan<
 	var closed bool
 	stop := make(chan bool)
 	meta := get[*meta](fsm.ctx, ctxKeyMeta)
-	fsm.pool.Run(func(mod api.Module) {
-		mod.ExportedFunction("__state_machine_stream_open").Call(ctx)
-	})
+	ctx = fsm.contextCopy(ctx)
 	ctx = context.WithValue(ctx, ctxKeySend, func(res *Result) {
 		closed = true
 		out <- res
 	})
 	ctx = context.WithValue(ctx, ctxKeyClose, func() {
 		close(stop)
+	})
+	fsm.pool.Run(func(mod api.Module) {
+		mod.ExportedFunction("__state_machine_stream_open").Call(ctx)
 	})
 loop:
 	for {

@@ -14,10 +14,11 @@ const UriPersistent = "pantopic/wazero-state-machine/persistent"
 
 type PoolProvider func(shardID uint64) wazeropool.Instance
 
-func FactoryPersistent(ctx context.Context, logger Logger, modPool PoolProvider) func(shardID, replicaID uint64) zongzi.StateMachinePersistent {
+func FactoryPersistent(ctx context.Context, logger Logger, modPool PoolProvider, ctxCopy ...ctxCopyFunc) func(shardID, replicaID uint64) zongzi.StateMachinePersistent {
 	return func(shardID, replicaID uint64) zongzi.StateMachinePersistent {
 		return &StateMachinePersistent{
 			ctx:       ctx,
+			ctxCopy:   ctxCopy,
 			log:       logger,
 			pool:      modPool(shardID),
 			replicaID: replicaID,
@@ -32,6 +33,7 @@ type StateMachinePersistent struct {
 	zongzi.StateMachinePersistent
 
 	ctx       context.Context
+	ctxCopy   []ctxCopyFunc
 	log       Logger
 	pool      wazeropool.Instance
 	replicaID uint64
@@ -51,31 +53,40 @@ func (fsm *StateMachinePersistent) Open(stopc <-chan struct{}) (index uint64, er
 	return
 }
 
+func (fsm *StateMachinePersistent) contextCopy(ctx context.Context) context.Context {
+	for _, fn := range fsm.ctxCopy {
+		ctx = fn(ctx, fsm.ctx)
+	}
+	return ctx
+}
+
 func (fsm *StateMachinePersistent) Update(entries []Entry) []Entry {
+	ctx := fsm.contextCopy(context.Background())
 	fsm.pool.Run(func(mod api.Module) {
 		meta := get[*meta](fsm.ctx, ctxKeyMeta)
 		update := mod.ExportedFunction("__state_machine_update")
 		for i, e := range entries {
 			setIndex(mod, meta, e.Index)
 			setData(mod, meta, e.Cmd)
-			if _, err := update.Call(fsm.ctx); err != nil {
+			if _, err := update.Call(ctx); err != nil {
 				panic(err)
 			}
 			entries[i].Result.Value = readUint64(mod, meta.ptrValue)
-			entries[i].Result.Data = append(e.Result.Data[:0], getData(mod, meta)...)
+			entries[i].Result.Data = append(entries[i].Result.Data[:0], getData(mod, meta)...)
 		}
-		mod.ExportedFunction("__state_machine_finish").Call(fsm.ctx)
+		mod.ExportedFunction("__state_machine_finish").Call(ctx)
 	})
 	return entries
 }
 
 func (fsm *StateMachinePersistent) Query(ctx context.Context, data []byte) (res *Result) {
+	ctx = fsm.contextCopy(ctx)
 	res = zongzi.GetResult()
 	fsm.pool.Run(func(mod api.Module) {
-		meta := get[*meta](ctx, ctxKeyMeta)
-		update := mod.ExportedFunction("__state_machine_read")
+		meta := get[*meta](fsm.ctx, ctxKeyMeta)
+		read := mod.ExportedFunction("__state_machine_read")
 		setData(mod, meta, data)
-		if _, err := update.Call(ctx); err != nil {
+		if _, err := read.Call(ctx); err != nil {
 			panic(err)
 		}
 		res.Value = readUint64(mod, meta.ptrValue)
@@ -85,6 +96,7 @@ func (fsm *StateMachinePersistent) Query(ctx context.Context, data []byte) (res 
 }
 
 func (fsm *StateMachinePersistent) Watch(ctx context.Context, data []byte, out chan<- *Result) {
+	ctx = fsm.contextCopy(ctx)
 	var closed bool
 	stop := make(chan bool)
 	meta := get[*meta](fsm.ctx, ctxKeyMeta)
@@ -115,6 +127,7 @@ func (fsm *StateMachinePersistent) Watch(ctx context.Context, data []byte, out c
 }
 
 func (fsm *StateMachinePersistent) Stream(ctx context.Context, in <-chan []byte, out chan<- *Result) {
+	ctx = fsm.contextCopy(ctx)
 	var closed bool
 	stop := make(chan bool)
 	meta := get[*meta](fsm.ctx, ctxKeyMeta)

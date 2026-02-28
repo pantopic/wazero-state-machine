@@ -1,6 +1,8 @@
 package wazero_state_machine
 
 import (
+	"context"
+
 	"github.com/logbn/zongzi"
 )
 
@@ -20,3 +22,5 @@ type (
 
 	ShardOption = zongzi.ShardOption
 )
+
+type ctxCopyFunc func(dst, src context.Context) context.Context
