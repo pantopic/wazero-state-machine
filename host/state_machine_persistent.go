@@ -16,6 +16,9 @@ type PoolProvider func(shardID uint64) wazeropool.Instance
 
 func FactoryPersistent(ctx context.Context, logger Logger, modPool PoolProvider, ctxCopy ...ctxCopyFunc) func(shardID, replicaID uint64) zongzi.StateMachinePersistent {
 	return func(shardID, replicaID uint64) zongzi.StateMachinePersistent {
+		for _, fn := range ctxCopy {
+			ctx = fn(ctx, ctx)
+		}
 		return &StateMachinePersistent{
 			ctx:       ctx,
 			ctxCopy:   ctxCopy,
@@ -127,10 +130,10 @@ func (fsm *StateMachinePersistent) Watch(ctx context.Context, data []byte, out c
 }
 
 func (fsm *StateMachinePersistent) Stream(ctx context.Context, in <-chan []byte, out chan<- *Result) {
-	ctx = fsm.contextCopy(ctx)
 	var closed bool
 	stop := make(chan bool)
 	meta := get[*meta](fsm.ctx, ctxKeyMeta)
+	ctx = fsm.contextCopy(ctx)
 	fsm.pool.Run(func(mod api.Module) {
 		mod.ExportedFunction("__state_machine_stream_open").Call(ctx)
 	})

@@ -14,6 +14,9 @@ const Uri = "pantopic/wazero-state-machine"
 
 func Factory(ctx context.Context, logger Logger, modPool PoolProvider, ctxCopy ...ctxCopyFunc) func(shardID, replicaID uint64) zongzi.StateMachine {
 	return func(shardID, replicaID uint64) zongzi.StateMachine {
+		for _, fn := range ctxCopy {
+			ctx = fn(ctx, ctx)
+		}
 		return &StateMachine{
 			ctx:       ctx,
 			ctxCopy:   ctxCopy,
@@ -116,15 +119,15 @@ func (fsm *StateMachine) Stream(ctx context.Context, in <-chan []byte, out chan<
 	stop := make(chan bool)
 	meta := get[*meta](fsm.ctx, ctxKeyMeta)
 	ctx = fsm.contextCopy(ctx)
+	fsm.pool.Run(func(mod api.Module) {
+		mod.ExportedFunction("__state_machine_stream_open").Call(ctx)
+	})
 	ctx = context.WithValue(ctx, ctxKeySend, func(res *Result) {
-		closed = true
 		out <- res
 	})
 	ctx = context.WithValue(ctx, ctxKeyClose, func() {
+		closed = true
 		close(stop)
-	})
-	fsm.pool.Run(func(mod api.Module) {
-		mod.ExportedFunction("__state_machine_stream_open").Call(ctx)
 	})
 loop:
 	for {
