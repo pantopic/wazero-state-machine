@@ -114,6 +114,12 @@ func (h *hostModule) InitContext(ctx context.Context, m api.Module) (context.Con
 // ContextCopy populates dst context with the meta page from src context.
 func (h *hostModule) ContextCopy(dst, src context.Context) context.Context {
 	dst = context.WithValue(dst, ctxKeyMeta, get[*meta](src, ctxKeyMeta))
+	if v := src.Value(ctxKeySend); v != nil {
+		dst = context.WithValue(dst, ctxKeySend, v.(func(res *Result)))
+	}
+	if v := src.Value(ctxKeyClose); v != nil {
+		dst = context.WithValue(dst, ctxKeyClose, v.(func()))
+	}
 	return dst
 }
 
@@ -131,6 +137,14 @@ func get[T any](ctx context.Context, key string) T {
 
 func setIndex(m api.Module, meta *meta, index uint64) {
 	writeUint64(m, meta.ptrIndex, index)
+}
+
+func setShardID(m api.Module, meta *meta, shardID uint64) {
+	writeUint64(m, meta.ptrShardID, shardID)
+}
+
+func setReplicaID(m api.Module, meta *meta, replicaID uint64) {
+	writeUint64(m, meta.ptrReplicaID, replicaID)
 }
 
 func setData(m api.Module, meta *meta, buf []byte) {

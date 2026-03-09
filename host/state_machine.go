@@ -52,6 +52,8 @@ func (fsm *StateMachine) Update(entries []Entry) []Entry {
 	ctx := fsm.contextCopy(context.Background())
 	fsm.pool.Run(func(mod api.Module) {
 		meta := get[*meta](fsm.ctx, ctxKeyMeta)
+		setShardID(mod, meta, fsm.shardID)
+		setReplicaID(mod, meta, fsm.replicaID)
 		update := mod.ExportedFunction("__state_machine_update")
 		for i, e := range entries {
 			setIndex(mod, meta, e.Index)
@@ -72,6 +74,8 @@ func (fsm *StateMachine) Query(ctx context.Context, data []byte) (res *Result) {
 	ctx = fsm.contextCopy(ctx)
 	fsm.pool.Run(func(mod api.Module) {
 		meta := get[*meta](fsm.ctx, ctxKeyMeta)
+		setShardID(mod, meta, fsm.shardID)
+		setReplicaID(mod, meta, fsm.replicaID)
 		read := mod.ExportedFunction("__state_machine_read")
 		setData(mod, meta, data)
 		if _, err := read.Call(ctx); err != nil {
@@ -96,6 +100,8 @@ func (fsm *StateMachine) Watch(ctx context.Context, data []byte, out chan<- *Res
 		close(stop)
 	})
 	fsm.pool.Run(func(mod api.Module) {
+		setShardID(mod, meta, fsm.shardID)
+		setReplicaID(mod, meta, fsm.replicaID)
 		setData(mod, meta, data)
 		mod.ExportedFunction("__state_machine_watch_open").Call(ctx)
 	})
@@ -109,6 +115,8 @@ func (fsm *StateMachine) Watch(ctx context.Context, data []byte, out chan<- *Res
 		break
 	}
 	fsm.pool.Run(func(mod api.Module) {
+		setShardID(mod, meta, fsm.shardID)
+		setReplicaID(mod, meta, fsm.replicaID)
 		setData(mod, meta, data)
 		mod.ExportedFunction("__state_machine_watch_closed").Call(ctx)
 	})
@@ -119,15 +127,17 @@ func (fsm *StateMachine) Stream(ctx context.Context, in <-chan []byte, out chan<
 	stop := make(chan bool)
 	meta := get[*meta](fsm.ctx, ctxKeyMeta)
 	ctx = fsm.contextCopy(ctx)
-	fsm.pool.Run(func(mod api.Module) {
-		mod.ExportedFunction("__state_machine_stream_open").Call(ctx)
-	})
 	ctx = context.WithValue(ctx, ctxKeySend, func(res *Result) {
 		out <- res
 	})
 	ctx = context.WithValue(ctx, ctxKeyClose, func() {
 		closed = true
 		close(stop)
+	})
+	fsm.pool.Run(func(mod api.Module) {
+		setShardID(mod, meta, fsm.shardID)
+		setReplicaID(mod, meta, fsm.replicaID)
+		mod.ExportedFunction("__state_machine_stream_open").Call(ctx)
 	})
 loop:
 	for {
@@ -141,12 +151,16 @@ loop:
 			break loop
 		case data := <-in:
 			fsm.pool.Run(func(mod api.Module) {
+				setShardID(mod, meta, fsm.shardID)
+				setReplicaID(mod, meta, fsm.replicaID)
 				setData(mod, meta, data)
 				mod.ExportedFunction("__state_machine_stream_recv").Call(ctx)
 			})
 		}
 	}
 	fsm.pool.Run(func(mod api.Module) {
+		setShardID(mod, meta, fsm.shardID)
+		setReplicaID(mod, meta, fsm.replicaID)
 		mod.ExportedFunction("__state_machine_stream_closed").Call(ctx)
 	})
 }
