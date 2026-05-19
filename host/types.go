@@ -23,4 +23,6 @@ type (
 	ShardOption = zongzi.ShardOption
 )
 
-type ctxCopyFunc func(dst, src context.Context) context.Context
+type ContextCopier interface {
+	ContextCopy(dst, src context.Context) context.Context
+}

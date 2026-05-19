@@ -14,16 +14,19 @@ const UriPersistent = "pantopic/wazero-state-machine/persistent"
 
 type PoolProvider func(shardID uint64) wazeropool.Instance
 
-func FactoryPersistent(ctx context.Context, logger Logger, modPool PoolProvider, ctxCopy ...ctxCopyFunc) func(shardID, replicaID uint64) zongzi.StateMachinePersistent {
+func FactoryPersistent(ctx context.Context, logger Logger, modPool PoolProvider, ctxCopiers ...ContextCopier) func(shardID, replicaID uint64) zongzi.StateMachinePersistent {
+	ctxCopiers = append(ctxCopiers, wazeropool.DefaultContextCopier)
 	return func(shardID, replicaID uint64) zongzi.StateMachinePersistent {
-		for _, fn := range ctxCopy {
-			ctx = fn(ctx, ctx)
+		pool := modPool(shardID)
+		ctx = wazeropool.ContextSet(ctx, pool)
+		for _, cc := range ctxCopiers {
+			ctx = cc.ContextCopy(ctx, ctx)
 		}
 		return &StateMachinePersistent{
 			ctx:       ctx,
-			ctxCopy:   ctxCopy,
+			ctxCopy:   ctxCopiers,
 			log:       logger,
-			pool:      modPool(shardID),
+			pool:      pool,
 			replicaID: replicaID,
 			shardID:   shardID,
 		}
@@ -36,7 +39,7 @@ type StateMachinePersistent struct {
 	zongzi.StateMachinePersistent
 
 	ctx       context.Context
-	ctxCopy   []ctxCopyFunc
+	ctxCopy   []ContextCopier
 	log       Logger
 	pool      wazeropool.Instance
 	replicaID uint64
@@ -57,8 +60,8 @@ func (fsm *StateMachinePersistent) Open(stopc <-chan struct{}) (index uint64, er
 }
 
 func (fsm *StateMachinePersistent) contextCopy(ctx context.Context) context.Context {
-	for _, fn := range fsm.ctxCopy {
-		ctx = fn(ctx, fsm.ctx)
+	for _, cc := range fsm.ctxCopy {
+		ctx = cc.ContextCopy(ctx, fsm.ctx)
 	}
 	return ctx
 }

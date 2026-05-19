@@ -30,7 +30,7 @@ var (
 	fnWatchClosed  funcWatchClosed
 )
 
-func Register(
+func Concurrent(
 	update funcUpdate,
 	finish funcFinish,
 	read funcRead,
@@ -40,7 +40,7 @@ func Register(
 	fnRead = read
 }
 
-func RegisterPersistent(
+func Persistent(
 	open funcOpen,
 	update funcUpdate,
 	finish funcFinish,
@@ -53,7 +53,7 @@ func RegisterPersistent(
 	flags = flags & flagPersistent
 }
 
-func Streamable(
+func Streaming(
 	streamOpen funcStreamOpen,
 	streamRecv funcStreamRecv,
 	streamClosed funcStreamClosed,

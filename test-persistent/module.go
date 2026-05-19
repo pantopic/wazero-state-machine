@@ -14,8 +14,8 @@ var (
 )
 
 func main() {
-	statemachine.RegisterPersistent(open, update, finish, read)
-	statemachine.Streamable(streamOpen, streamRecv, streamClosed)
+	statemachine.Persistent(open, update, finish, read)
+	statemachine.Streaming(streamOpen, streamRecv, streamClosed)
 	statemachine.Watchable(watchOpen, watchClosed)
 }
 

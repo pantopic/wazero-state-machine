@@ -42,7 +42,7 @@ func TestHostModule(t *testing.T) {
 	})
 
 	cfg := wazero.NewModuleConfig().WithStdout(os.Stdout)
-	t.Run(`in-memory`, func(t *testing.T) {
+	t.Run(`concurrent`, func(t *testing.T) {
 		pool, err := wazeropool.New(ctx, r, testWasm,
 			wazeropool.WithModuleConfig(cfg))
 		if err != nil {
