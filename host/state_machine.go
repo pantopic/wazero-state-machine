@@ -12,13 +12,13 @@ import (
 
 const Uri = "pantopic/wazero-state-machine"
 
-func Factory(ctx context.Context, logger Logger, modPool PoolProvider, ctxCopiers ...ContextCopier) func(shardID, replicaID uint64) zongzi.StateMachine {
-	ctxCopiers = append(ctxCopiers, wazeropool.DefaultContextCopier)
+func Factory(ctx context.Context, logger Logger, modPool PoolProvider, ctxCopiers ...ContextCopy) func(shardID, replicaID uint64) zongzi.StateMachine {
+	ctxCopiers = append(ctxCopiers, wazeropool.ContextCopy)
 	return func(shardID, replicaID uint64) zongzi.StateMachine {
 		pool := modPool(shardID)
 		ctx = wazeropool.ContextSet(ctx, pool)
 		for _, cc := range ctxCopiers {
-			ctx = cc.ContextCopy(ctx, ctx)
+			ctx = cc(ctx, ctx)
 		}
 		return &StateMachine{
 			ctx:       ctx,
@@ -37,7 +37,7 @@ type StateMachine struct {
 	zongzi.StateMachine
 
 	ctx       context.Context
-	ctxCopy   []ContextCopier
+	ctxCopy   []ContextCopy
 	log       Logger
 	pool      wazeropool.Instance
 	replicaID uint64
@@ -46,7 +46,7 @@ type StateMachine struct {
 
 func (fsm *StateMachine) contextCopy(ctx context.Context) context.Context {
 	for _, cc := range fsm.ctxCopy {
-		ctx = cc.ContextCopy(ctx, fsm.ctx)
+		ctx = cc(ctx, fsm.ctx)
 	}
 	return ctx
 }
