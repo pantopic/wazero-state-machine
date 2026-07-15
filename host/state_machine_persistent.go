@@ -13,11 +13,15 @@ import (
 const UriPersistent = "pantopic/wazero-state-machine/persistent"
 
 type PoolProvider func(shardID uint64) wazeropool.Instance
+type ContextInit func(ctx context.Context, shardID, replicaID uint64) context.Context
 
-func FactoryPersistent(ctx context.Context, logger Logger, modPool PoolProvider, ctxCopiers ...ContextCopy) func(shardID, replicaID uint64) zongzi.StateMachinePersistent {
+func FactoryPersistent(ctx context.Context, logger Logger, poolProvider PoolProvider, ctxInit ContextInit, ctxCopiers ...ContextCopy) func(shardID, replicaID uint64) zongzi.StateMachinePersistent {
 	ctxCopiers = append(ctxCopiers, wazeropool.ContextCopy)
 	return func(shardID, replicaID uint64) zongzi.StateMachinePersistent {
-		pool := modPool(shardID)
+		if ctxInit != nil {
+			ctx = ctxInit(ctx, shardID, replicaID)
+		}
+		pool := poolProvider(shardID)
 		ctx = wazeropool.ContextSet(ctx, pool)
 		for _, cc := range ctxCopiers {
 			ctx = cc(ctx, ctx)

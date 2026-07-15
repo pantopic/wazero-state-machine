@@ -12,10 +12,13 @@ import (
 
 const Uri = "pantopic/wazero-state-machine"
 
-func Factory(ctx context.Context, logger Logger, modPool PoolProvider, ctxCopiers ...ContextCopy) func(shardID, replicaID uint64) zongzi.StateMachine {
+func Factory(ctx context.Context, logger Logger, poolProvider PoolProvider, ctxInit ContextInit, ctxCopiers ...ContextCopy) func(shardID, replicaID uint64) zongzi.StateMachine {
 	ctxCopiers = append(ctxCopiers, wazeropool.ContextCopy)
 	return func(shardID, replicaID uint64) zongzi.StateMachine {
-		pool := modPool(shardID)
+		if ctxInit != nil {
+			ctx = ctxInit(ctx, shardID, replicaID)
+		}
+		pool := poolProvider(shardID)
 		ctx = wazeropool.ContextSet(ctx, pool)
 		for _, cc := range ctxCopiers {
 			ctx = cc(ctx, ctx)
