@@ -54,7 +54,10 @@ func TestHostModule(t *testing.T) {
 				t.Fatalf(`%v`, err)
 			}
 		})
-		smf := Factory(ctx, zongzi.GetLogger(`test`), pool, nil)
+		poolProvider := func(shardID uint64) wazeropool.Instance {
+			return pool
+		}
+		smf := Factory(ctx, zongzi.GetLogger(`test`), poolProvider, nil)
 		test(t, ctx, smf(1, 1))
 	})
 	t.Run(`persistent`, func(t *testing.T) {
@@ -69,10 +72,10 @@ func TestHostModule(t *testing.T) {
 				t.Fatalf(`%v`, err)
 			}
 		})
-		pp := func(shardID uint64) wazeropool.Instance {
+		poolProvider := func(shardID uint64) wazeropool.Instance {
 			return pool
 		}
-		smf := FactoryPersistent(ctx, zongzi.GetLogger(`test-persistent`), pp, nil)
+		smf := FactoryPersistent(ctx, zongzi.GetLogger(`test-persistent`), poolProvider, nil)
 		test(t, ctx, smf(1, 1))
 	})
 }
