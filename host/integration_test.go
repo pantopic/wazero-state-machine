@@ -127,10 +127,10 @@ func test(t *testing.T, ctx context.Context, sm StateMachineCommon) {
 			go func() {
 				for res := range out {
 					if res.Value != 1 {
-						t.Fatalf(`Value should be 1 but got %d`, res.Value)
+						t.Errorf(`Value should be 1 but got %d`, res.Value)
 					}
 					if string(res.Data) != `echo` {
-						t.Fatalf(`Data should be "echo" but got "%s"`, res.Data)
+						t.Errorf(`Data should be "echo" but got "%s"`, res.Data)
 					}
 				}
 			}()
@@ -147,10 +147,10 @@ func test(t *testing.T, ctx context.Context, sm StateMachineCommon) {
 			go func() {
 				for res := range out {
 					if res.Value != 1 {
-						t.Fatalf(`Value should be 1 but got %d`, res.Value)
+						t.Errorf(`Value should be 1 but got %d`, res.Value)
 					}
 					if string(res.Data) != `echo` {
-						t.Fatalf(`Data should be "echo" but got "%s"`, res.Data)
+						t.Errorf(`Data should be "echo" but got "%s"`, res.Data)
 					}
 				}
 			}()
@@ -167,10 +167,10 @@ func test(t *testing.T, ctx context.Context, sm StateMachineCommon) {
 					received++
 					println(`watch ` + string(res.Data))
 					if res.Value != 1 {
-						t.Fatalf(`Value should be 1 but got %d`, res.Value)
+						t.Errorf(`Value should be 1 but got %d`, res.Value)
 					}
 					if string(res.Data) != strconv.Itoa(received) {
-						t.Fatalf(`Data should be "%d" but got "%s"`, received, res.Data)
+						t.Errorf(`Data should be "%d" but got "%s"`, received, res.Data)
 					}
 				}
 			})
@@ -189,17 +189,15 @@ func test(t *testing.T, ctx context.Context, sm StateMachineCommon) {
 			var wg sync.WaitGroup
 			wg.Go(func() {
 				defer close(out)
-				for res := range out {
-					received++
-					if res.Value != 1 {
-						t.Fatalf(`Value should be 1 but got %d`, res.Value)
-					}
-					if string(res.Data) != strconv.Itoa(received) {
-						t.Fatalf(`Data should be "%d" but got "%s"`, received, res.Data)
-					}
-					cancel()
-					return
+				res := <-out
+				received++
+				if res.Value != 1 {
+					t.Errorf(`Value should be 1 but got %d`, res.Value)
 				}
+				if string(res.Data) != strconv.Itoa(received) {
+					t.Errorf(`Data should be "%d" but got "%s"`, received, res.Data)
+				}
+				cancel()
 			})
 			n := 2
 			sm.Watch(ctx, []byte(strconv.Itoa(n)), out)
