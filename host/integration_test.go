@@ -75,7 +75,7 @@ func TestHostModule(t *testing.T) {
 		poolProvider := func(shardID uint64) wazeropool.Instance {
 			return pool
 		}
-		smf := FactoryPersistent(ctx, zongzi.GetLogger(`test-persistent`), poolProvider, nil)
+		smf := FactoryPersistent(ctx, nil, nil, zongzi.GetLogger(`test-persistent`), poolProvider)
 		test(t, ctx, smf(1, 1))
 	})
 }

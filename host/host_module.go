@@ -32,7 +32,9 @@ type meta struct {
 type hostModule struct {
 	sync.RWMutex
 
-	module api.Module
+	module               api.Module
+	extStorage           []StorageExtension
+	extStoragePersistent []StorageExtensionPersistent
 }
 
 func New(opts ...Option) *hostModule {
