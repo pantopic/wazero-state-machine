@@ -23,6 +23,12 @@ var testWasm []byte
 //go:embed test\-persistent\.wasm
 var testWasmPersistent []byte
 
+//go:embed test\-zig\.wasm
+var testWasmZig []byte
+
+//go:embed test\-persistent\-zig\.wasm
+var testWasmPersistentZig []byte
+
 type StateMachineCommon interface {
 	Update(entries []Entry) []Entry
 	Query(ctx context.Context, query []byte) *Result
@@ -41,43 +47,41 @@ func TestHostModule(t *testing.T) {
 		hostModule.Register(ctx, r)
 	})
 
-	cfg := wazero.NewModuleConfig().WithStdout(os.Stdout)
-	t.Run(`concurrent`, func(t *testing.T) {
-		pool, err := wazeropool.New(ctx, r, testWasm,
-			wazeropool.WithModuleConfig(cfg))
-		if err != nil {
-			t.Fatalf(`%v`, err)
-		}
-		pool.Run(func(mod api.Module) {
-			ctx, err = hostModule.InitContext(ctx, mod)
+	cfg := wazero.NewModuleConfig().WithStdout(os.Stdout).WithStderr(os.Stderr)
+	for _, tc := range []struct {
+		name       string
+		wasm       []byte
+		persistent bool
+	}{
+		{`concurrent`, testWasm, false},
+		{`persistent`, testWasmPersistent, true},
+		{`concurrent-zig`, testWasmZig, false},
+		{`persistent-zig`, testWasmPersistentZig, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pool, err := wazeropool.New(ctx, r, tc.wasm,
+				wazeropool.WithModuleConfig(cfg))
 			if err != nil {
 				t.Fatalf(`%v`, err)
 			}
-		})
-		poolProvider := func(shardID uint64) wazeropool.Instance {
-			return pool
-		}
-		smf := Factory(ctx, zongzi.GetLogger(`test`), poolProvider, nil)
-		test(t, ctx, smf(1, 1))
-	})
-	t.Run(`persistent`, func(t *testing.T) {
-		pool, err := wazeropool.New(ctx, r, testWasmPersistent,
-			wazeropool.WithModuleConfig(cfg))
-		if err != nil {
-			t.Fatalf(`%v`, err)
-		}
-		pool.Run(func(mod api.Module) {
-			ctx, err = hostModule.InitContext(ctx, mod)
-			if err != nil {
-				t.Fatalf(`%v`, err)
+			pool.Run(func(mod api.Module) {
+				ctx, err = hostModule.InitContext(ctx, mod)
+				if err != nil {
+					t.Fatalf(`%v`, err)
+				}
+			})
+			poolProvider := func(shardID uint64) wazeropool.Instance {
+				return pool
 			}
+			var sm StateMachineCommon
+			if tc.persistent {
+				sm = FactoryPersistent(ctx, nil, nil, zongzi.GetLogger(tc.name), poolProvider)(1, 1)
+			} else {
+				sm = Factory(ctx, zongzi.GetLogger(tc.name), poolProvider, nil)(1, 1)
+			}
+			test(t, ctx, sm)
 		})
-		poolProvider := func(shardID uint64) wazeropool.Instance {
-			return pool
-		}
-		smf := FactoryPersistent(ctx, nil, nil, zongzi.GetLogger(`test-persistent`), poolProvider)
-		test(t, ctx, smf(1, 1))
-	})
+	}
 }
 
 func test(t *testing.T, ctx context.Context, sm StateMachineCommon) {
