@@ -12,7 +12,13 @@ import (
 
 const Uri = "pantopic/wazero-state-machine"
 
-func Factory(ctx context.Context, logger Logger, poolProvider PoolProvider, ctxInit ContextInit, ctxCopiers ...ContextCopy) func(shardID, replicaID uint64) zongzi.StateMachine {
+func Factory(
+	ctx context.Context,
+	logger Logger,
+	poolProvider PoolProvider,
+	ctxInit ContextInit,
+	ctxCopiers ...ContextCopy,
+) func(shardID, replicaID uint64) zongzi.StateMachine {
 	ctxCopiers = append(ctxCopiers, wazeropool.ContextCopy)
 	return func(shardID, replicaID uint64) zongzi.StateMachine {
 		if ctxInit != nil {
@@ -71,7 +77,7 @@ func (fsm *StateMachine) Update(entries []Entry) []Entry {
 			entries[i].Result.Data = append(entries[i].Result.Data[:0], getData(mod, meta)...)
 		}
 		mod.ExportedFunction("__state_machine_finish").Call(ctx)
-	})
+	}, true)
 	return entries
 }
 

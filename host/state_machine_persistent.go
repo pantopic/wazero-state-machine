@@ -93,7 +93,7 @@ func (fsm *StateMachinePersistent) Update(entries []Entry) []Entry {
 			entries[i].Result.Data = append(entries[i].Result.Data[:0], getData(mod, meta)...)
 		}
 		mod.ExportedFunction("__state_machine_finish").Call(ctx)
-	})
+	}, true)
 	return entries
 }
 
