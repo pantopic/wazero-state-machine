@@ -156,7 +156,11 @@ func (fsm *StateMachinePersistent) Stream(ctx context.Context, in <-chan []byte,
 	meta := get[*meta](fsm.ctx, ctxKeyMeta)
 	ctx = fsm.contextCopy(ctx)
 	ctx = context.WithValue(ctx, ctxKeySend, func(res *Result) {
-		out <- res
+		select {
+		case out <- res:
+		case <-ctx.Done():
+			return
+		}
 	})
 	ctx = context.WithValue(ctx, ctxKeyClose, func() {
 		closed = true
