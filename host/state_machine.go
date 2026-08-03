@@ -76,7 +76,9 @@ func (fsm *StateMachine) Update(entries []Entry) []Entry {
 			entries[i].Result.Value = readUint64(mod, meta.ptrValue)
 			entries[i].Result.Data = append(entries[i].Result.Data[:0], getData(mod, meta)...)
 		}
-		mod.ExportedFunction("__state_machine_finish").Call(ctx)
+		if _, err := mod.ExportedFunction("__state_machine_finish").Call(ctx); err != nil {
+			panic(err)
+		}
 	}, true)
 	return entries
 }
@@ -115,7 +117,9 @@ func (fsm *StateMachine) Watch(ctx context.Context, data []byte, out chan<- *Res
 		setShardID(mod, meta, fsm.shardID)
 		setReplicaID(mod, meta, fsm.replicaID)
 		setData(mod, meta, data)
-		mod.ExportedFunction("__state_machine_watch_open").Call(ctx)
+		if _, err := mod.ExportedFunction("__state_machine_stream_open").Call(ctx); err != nil {
+			panic(err)
+		}
 	})
 	select {
 	case <-ctx.Done():
@@ -130,7 +134,9 @@ func (fsm *StateMachine) Watch(ctx context.Context, data []byte, out chan<- *Res
 		setShardID(mod, meta, fsm.shardID)
 		setReplicaID(mod, meta, fsm.replicaID)
 		setData(mod, meta, data)
-		mod.ExportedFunction("__state_machine_watch_closed").Call(ctx)
+		if _, err := mod.ExportedFunction("__state_machine_watch_closed").Call(ctx); err != nil {
+			panic(err)
+		}
 	})
 }
 
@@ -153,7 +159,9 @@ func (fsm *StateMachine) Stream(ctx context.Context, in <-chan []byte, out chan<
 	fsm.pool.Run(func(mod api.Module) {
 		setShardID(mod, meta, fsm.shardID)
 		setReplicaID(mod, meta, fsm.replicaID)
-		mod.ExportedFunction("__state_machine_stream_open").Call(ctx)
+		if _, err := mod.ExportedFunction("__state_machine_stream_open").Call(ctx); err != nil {
+			panic(err)
+		}
 	})
 loop:
 	for {
@@ -170,14 +178,18 @@ loop:
 				setShardID(mod, meta, fsm.shardID)
 				setReplicaID(mod, meta, fsm.replicaID)
 				setData(mod, meta, data)
-				mod.ExportedFunction("__state_machine_stream_recv").Call(ctx)
+				if _, err := mod.ExportedFunction("__state_machine_stream_recv").Call(ctx); err != nil {
+					panic(err)
+				}
 			})
 		}
 	}
 	fsm.pool.Run(func(mod api.Module) {
 		setShardID(mod, meta, fsm.shardID)
 		setReplicaID(mod, meta, fsm.replicaID)
-		mod.ExportedFunction("__state_machine_stream_closed").Call(ctx)
+		if _, err := mod.ExportedFunction("__state_machine_stream_closed").Call(ctx); err != nil {
+			panic(err)
+		}
 	})
 }
 
