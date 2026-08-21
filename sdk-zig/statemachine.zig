@@ -114,10 +114,10 @@ export fn __state_machine_finish() void {
     fn_finish.?();
 }
 
-export fn __state_machine_read() void {
+export fn __state_machine_read() u64 {
     const res = fn_read.?(buf[0..buf_len]);
     value = res.value;
-    setData(res.data);
+    return (@as(u64, @intFromPtr(res.data.ptr)) << 32) + @as(u64, res.data.len);
 }
 
 export fn __state_machine_stream_open() void {

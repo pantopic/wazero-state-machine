@@ -3,6 +3,7 @@ package wazero_state_machine
 import (
 	"context"
 	"io"
+	"log/slog"
 
 	"github.com/logbn/zongzi"
 	"github.com/tetratelabs/wazero/api"
@@ -99,18 +100,23 @@ func (fsm *StateMachinePersistent) Update(entries []Entry) []Entry {
 
 func (fsm *StateMachinePersistent) Query(ctx context.Context, data []byte) (res *Result) {
 	ctx = fsm.contextCopy(ctx)
-	res = zongzi.GetResult()
 	fsm.pool.Run(func(mod api.Module) {
 		meta := get[*meta](fsm.ctx, ctxKeyMeta)
 		setShardID(mod, meta, fsm.shardID)
 		setReplicaID(mod, meta, fsm.replicaID)
 		read := mod.ExportedFunction("__state_machine_read")
 		setData(mod, meta, data)
-		if _, err := read.Call(ctx); err != nil {
-			panic(err)
+		stack, err := read.Call(ctx)
+		if err != nil {
+			slog.Error(`StateMachinePersistent.Query error`, "err", err.Error(), `len`, len(data))
+			return
 		}
+		res = zongzi.GetResult()
 		res.Value = readUint64(mod, meta.ptrValue)
-		res.Data = append(res.Data[:0], getData(mod, meta)...)
+		buf, ok := mod.Memory().Read(uint32(stack[0]>>32), uint32(stack[0]))
+		if ok {
+			res.Data = append(res.Data[:0], buf...)
+		}
 	})
 	return
 }
