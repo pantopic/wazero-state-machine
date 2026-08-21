@@ -50,7 +50,7 @@ func Persistent(
 	fnUpdate = update
 	fnFinish = finish
 	fnRead = read
-	flags = flags & flagPersistent
+	flags |= flagPersistent
 }
 
 func Streaming(
@@ -61,7 +61,7 @@ func Streaming(
 	fnStreamOpen = streamOpen
 	fnStreamRecv = streamRecv
 	fnStreamClosed = streamClosed
-	flags = flags & flagStreamable
+	flags |= flagStreamable
 }
 
 func StreamSend(val uint64, data []byte) {

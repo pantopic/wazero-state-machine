@@ -1,11 +1,16 @@
 work:
 	go work use sdk-go
 	go work use test
+	go work use test-persistent
 	go work use host
 
 wasm:
 	@cd test && tinygo build -buildmode=wasi-legacy -target=wasi -opt=2 -gc=leaking -scheduler=none -o ../host/test.wasm
 	@cd test-persistent && tinygo build -buildmode=wasi-legacy -target=wasi -opt=2 -gc=leaking -scheduler=none -o ../host/test-persistent.wasm
+
+wasm-zig:
+	@cd test-zig && zig build-exe -target wasm32-wasi -O ReleaseSmall -fno-entry -rdynamic --dep statemachine -Mroot=module.zig -Mstatemachine=../sdk-zig/statemachine.zig -femit-bin=../host/test-zig.wasm
+	@cd test-persistent-zig && zig build-exe -target wasm32-wasi -O ReleaseSmall -fno-entry -rdynamic --dep statemachine -Mroot=module.zig -Mstatemachine=../sdk-zig/statemachine.zig -femit-bin=../host/test-persistent-zig.wasm
 
 test:
 	@cd host && go test . -v -cover

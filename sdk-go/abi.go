@@ -5,7 +5,6 @@ import (
 )
 
 var (
-	meta      = make([]uint32, 8)
 	flags     uint16
 	ShardID   uint64
 	ReplicaID uint64
@@ -15,18 +14,23 @@ var (
 	bufLen    uint32
 	buf       = make([]byte, int(bufCap))
 	tmp       []byte
+	meta      = make([]uint32, 8)
 )
 
 //export __state_machine
 func __statemachine() uint32 {
-	meta[0] = uint32(uintptr(unsafe.Pointer(&flags)))
-	meta[1] = uint32(uintptr(unsafe.Pointer(&ShardID)))
-	meta[2] = uint32(uintptr(unsafe.Pointer(&ReplicaID)))
-	meta[3] = uint32(uintptr(unsafe.Pointer(&index)))
-	meta[4] = uint32(uintptr(unsafe.Pointer(&value)))
-	meta[5] = uint32(uintptr(unsafe.Pointer(&bufCap)))
-	meta[6] = uint32(uintptr(unsafe.Pointer(&bufLen)))
-	meta[7] = uint32(uintptr(unsafe.Pointer(&buf[0])))
+	for i, p := range []unsafe.Pointer{
+		unsafe.Pointer(&flags),
+		unsafe.Pointer(&ShardID),
+		unsafe.Pointer(&ReplicaID),
+		unsafe.Pointer(&index),
+		unsafe.Pointer(&value),
+		unsafe.Pointer(&bufCap),
+		unsafe.Pointer(&bufLen),
+		unsafe.Pointer(&buf[0]),
+	} {
+		meta[i] = uint32(uintptr(p))
+	}
 	return uint32(uintptr(unsafe.Pointer(&meta[0])))
 }
 
@@ -48,10 +52,9 @@ func finish() {
 }
 
 //export __state_machine_read
-func read() {
+func read() uint64 {
 	value, tmp = fnRead(buf[:int(bufLen)])
-	copy(buf[:len(tmp)], tmp)
-	bufLen = uint32(len(tmp))
+	return (uint64(uintptr(unsafe.Pointer(&tmp[0]))) << 32) + uint64(len(tmp))
 }
 
 //export __state_machine_stream_open
